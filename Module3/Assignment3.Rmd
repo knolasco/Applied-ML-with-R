@@ -1,0 +1,84 @@
+---
+title: "Imputing with imputeTS"
+author: "Kevin Nolasco"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+
+```{r, results = FALSE}
+library(imputeTS)
+library(glue)
+```
+
+
+### Load Data
+
+```{r}
+# load dataset ----
+data_with_na <- tsNH4
+data_complete <- tsNH4Complete
+```
+
+## Hypothesis
+
+According to the documentation for imputeTS, the tsNH4 dataset is a time-series NH4 concentration in a waste-water system. Since this is a time series dataset, I believe seasonality will play a big role on the way the dataset behaves. Therefore, a simple imputation method - such as using the mean, median, or mode will not be sufficient to capture the trend of the data. I believe the best method for imputing this dataset will be an interpolation model with spline or Stineman Interpolation.
+
+We will test three interpolation functions (na_interpolation, na_kalman, and na_seadec) and we will tweak each parameters for the best result. For example, we will impute using na_interpolation with linear, 
+spline, and stine interpolation.
+
+The results of the imputations will be evaluated using RMSE (root mean squared error).
+
+## Data Visualization
+Let's see what the dataset looks like, and how many missing values there are.
+
+```{r}
+ggplot_na_distribution(data_with_na)
+
+```
+
+We can visually see that there are a lot of missing values. Let's get a concrete set of how many values we are dealing with using the stats package included in imputeTS.
+
+```{r}
+statsNA(data_with_na)
+```
+
+From the stats output, we can see the dataset consists of 4,552 data points with 883 missing values (19.4% of values are missing).
+
+# Impute Values
+
+## na_interpolation
+
+```{r}
+na_interpolation_results <- function(dataset, dataset_no_missing){
+  # impute
+  with_linear <- na_interpolation(dataset, option = "linear")
+  with_spline <- na_interpolation(dataset, option = "spline")
+  with_stine <- na_interpolation(dataset, option = "stine")
+  
+  datasets <- list(with_linear, with_spline, with_stine)
+  names <- list("Linear", "Spline", "Stine")
+  all_rmse <- c()
+  # calculate and print rmse's
+  for(ind in 1:3){
+    name <- names[[ind]]
+    data <- datasets[[ind]]
+    rmse <- sqrt(mean((data - dataset_no_missing)^2))
+    print(glue("RMSE for {name} Imputation : {rmse}"))
+    all_rmse <- c(all_rmse, rmse)
+  }
+  # print method with lowest rmse
+  min_ind <- which.min(all_rmse)
+  lowest_rmse <- all_rmse[min_ind]
+  name_lowest_rmse <- names[[min_ind]]
+  print(glue("{name_lowest_rmse} Imputation had the lowest RMSE of: {lowest_rmse}"))
+}
+na_interpolation_results(data_with_na, data_complete)
+```
+
+
