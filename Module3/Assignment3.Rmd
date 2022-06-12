@@ -2,7 +2,9 @@
 title: "Imputing with imputeTS"
 author: "Kevin Nolasco"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -14,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, results = FALSE}
 library(imputeTS) # for imputation functions and dataset
 library(glue) # to format printing
-library(ggpubr) # for plotting multiple plots
+library(tictoc) # to know how long the imputation takes
 ```
 
 
@@ -58,9 +60,18 @@ From the stats output, we can see the dataset consists of 4,552 data points with
 ```{r}
 na_interpolation_results <- function(dataset, dataset_no_missing){
   # impute
+  tic()
   with_linear <- na_interpolation(dataset, option = "linear")
+  print("Time to impute using Linear Interpolation:")
+  toc()
+  tic()
   with_spline <- na_interpolation(dataset, option = "spline")
+  print("Time to impute using Spline Interpolation:")
+  toc()
+  tic()
   with_stine <- na_interpolation(dataset, option = "stine")
+  print("Time to impute using Stine Interpolation")
+  toc()
   
   datasets <- list(with_linear, with_spline, with_stine)
   names <- list("Linear", "Spline", "Stine")
@@ -102,17 +113,41 @@ From the plots above, we can see the imputed values for Spline interpolation bet
 
 According to the documentation, the kalman methods for imputing work better for datasets that contain seasonality. As we saw above, the dataset does contain some seasonality, so let's see how these imputation techniques do.
 
+**NOTE** the plan was to run the kalman imputation method using model = "auto.arima" and "StructTS" but the imputations gave no results even after 30 minutes of letting it run. Because of this, I will not be including these methods in this analysis.
+
+## na_seadec
+
+Just like the na_kalman methods, the na_seadec method is supposed to work well with datasets that contain seasonality. Let's see how well it performs on our dataset. We will try 5 methods included in the na_seadec package: "interpolation", "locf", "mean", "random", and "ma". We will not be trying the kalman method because it takes too long to run.
+
 ```{r}
-na_kalman_results <- function(dataset, dataset_no_missing){
+na_seadec_results <- function(dataset, dataset_no_missing){
   # impute
-  with_linear <- na_kalman(dataset, model =  "auto.arima")
-  with_stine <- na_kalman(dataset, model = "StructTS")
+  tic()
+  with_inter <- na_seadec(dataset, algorithm = "interpolation")
+  print("Time to impute using Interpolation:")
+  toc()
+  tic()
+  with_locf <- na_seadec(dataset, algorithm = "locf")
+  print("Time to impute using LocF:")
+  toc()
+  tic()
+  with_mean <- na_seadec(dataset, algorithm = "mean")
+  print("Time to impute using Mean")
+  toc()
+  tic()
+  with_random <- na_seadec(dataset, algorithm = "random")
+  print("Time to impute using Random:")
+  toc()
+  tic()
+  with_ma <- na_seadec(dataset, algorithm = "ma")
+  print("Time to impute using MA")
+  toc()
   
-  datasets <- list(with_linear, with_spline, with_stine)
-  names <- list("Linear", "Spline", "Stine")
+  datasets <- list(with_inter, with_locf, with_mean, with_random, with_ma)
+  names <- list("Interpolation", "LocF", "Mean", "Random", "MA")
   all_rmse <- c()
   # calculate and print rmse's
-  for(ind in 1:3){
+  for(ind in 1:5){
     name <- names[[ind]]
     data <- datasets[[ind]]
     rmse <- sqrt(mean((data - dataset_no_missing)^2))
@@ -125,5 +160,29 @@ na_kalman_results <- function(dataset, dataset_no_missing){
   name_lowest_rmse <- names[[min_ind]]
   print(glue("{name_lowest_rmse} Imputation had the lowest RMSE of: {lowest_rmse}"))
   return(datasets)
+}
+imputed_datasets_seadec <- na_seadec_results(data_with_na, data_complete)
 ```
 
+According to the results above, regular imputation worked best, with a RMSE score of 0.822, which is roughly 0.238 points more accurate than the linear interpolation in the na_interpolation model. The second best model was the MA model (imputation by weighted moving average), which also performed better than the linear interpolation in the previous model and performed only slightly worse than the regular interpolation method. Finally, we can  see that the random method of interplation did not perform well at all. Let's visualize the interpolations.
+
+
+
+```{r}
+ggplot_na_imputations(data_with_na, imputed_datasets_seadec[[1]], data_complete, title = "Interpolation Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets_seadec[[2]], data_complete, title = "LocF Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets_seadec[[3]], data_complete, title = "Mean Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets_seadec[[4]], data_complete, title = "Random Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets_seadec[[5]], data_complete, title = "Moving Average Imputations")
+
+```
+
+If we consider the plots above, we can see that regular interpolation and Moving Average Imputations performed very similarly except between x = 1500 and x = 2000. The Moving Average imputations actually hugged the true value more than the regular interpolations, but had a spike in mistakes around x = 1800. This could be the reason that regular interpolation performed better on average.
+
+# Conclusion
+
+Based on the results from this analysis, my hypthesis that spline interpolation would work best was incorrect. Spline interpolation is a model with low bias and high variance which led to the big errors in the predicted values. Linear interpolation is a high bias and low variance model that reduces the size of the errors. Even then, the weighted average interpolation performed very well comparatively and only made big mistakes when the bin of missing values was large. One way to improve this is by interpolating using weighted moving average when the chunk of missing values is small, and using linear interpolation when the chunk of missing values is large.
