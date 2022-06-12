@@ -12,8 +12,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ### Load Libraries
 
 ```{r, results = FALSE}
-library(imputeTS)
-library(glue)
+library(imputeTS) # for imputation functions and dataset
+library(glue) # to format printing
+library(ggpubr) # for plotting multiple plots
 ```
 
 
@@ -77,8 +78,52 @@ na_interpolation_results <- function(dataset, dataset_no_missing){
   lowest_rmse <- all_rmse[min_ind]
   name_lowest_rmse <- names[[min_ind]]
   print(glue("{name_lowest_rmse} Imputation had the lowest RMSE of: {lowest_rmse}"))
+  return(datasets)
 }
-na_interpolation_results(data_with_na, data_complete)
+imputed_datasets <- na_interpolation_results(data_with_na, data_complete)
 ```
 
+Based on the analysis above, we could see that the linear interpolation worked best for imputing this dataset. My hypothesis was that the spline or Stineman interpolation would work best. From my understanding, spline uses a polynomial function to approximate the next data point, this could why the interpolation did not work well. There is a chance that the interpolating polynomial was estimated with a high degree. Models using high degree polynomials have high variance, which explains the higher RMSE's.
+
+Let's plot the imputed values for each method.
+
+```{r}
+ggplot_na_imputations(data_with_na, imputed_datasets[[1]], data_complete, title = "Linear Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets[[2]], data_complete, title = "Spline Imputations")
+
+ggplot_na_imputations(data_with_na, imputed_datasets[[3]], data_complete, title = "Stineman Imputations")
+
+```
+
+From the plots above, we can see the imputed values for Spline interpolation between x = 1000 and x = 1500, the imputed values are very off from the actual values. This is probably due to the high degree polynomial that we discussed in the section before.
+
+## na_kalman
+
+According to the documentation, the kalman methods for imputing work better for datasets that contain seasonality. As we saw above, the dataset does contain some seasonality, so let's see how these imputation techniques do.
+
+```{r}
+na_kalman_results <- function(dataset, dataset_no_missing){
+  # impute
+  with_linear <- na_kalman(dataset, model =  "auto.arima")
+  with_stine <- na_kalman(dataset, model = "StructTS")
+  
+  datasets <- list(with_linear, with_spline, with_stine)
+  names <- list("Linear", "Spline", "Stine")
+  all_rmse <- c()
+  # calculate and print rmse's
+  for(ind in 1:3){
+    name <- names[[ind]]
+    data <- datasets[[ind]]
+    rmse <- sqrt(mean((data - dataset_no_missing)^2))
+    print(glue("RMSE for {name} Imputation : {rmse}"))
+    all_rmse <- c(all_rmse, rmse)
+  }
+  # print method with lowest rmse
+  min_ind <- which.min(all_rmse)
+  lowest_rmse <- all_rmse[min_ind]
+  name_lowest_rmse <- names[[min_ind]]
+  print(glue("{name_lowest_rmse} Imputation had the lowest RMSE of: {lowest_rmse}"))
+  return(datasets)
+```
 
