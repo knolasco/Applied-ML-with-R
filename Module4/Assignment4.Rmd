@@ -1,0 +1,56 @@
+---
+title: "Clustering with Hierarchical & DBSCAN methods"
+author: "Kevin Nolasco"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+# Data
+
+For this project, we will create an artificial dataset with 5 features generated randomly from normal, uniform, binomial, poisson, and exponential distributions. We will use PCA to project the data into two principal components and apply Hierarchical and DBSCAN clustering to the projected data.
+
+```{r}
+set.seed(1995)
+n_observations <- 500
+normal <- rnorm(n_observations, mean = 5, sd = 10)
+poisson <- rpois(n_observations, 2)
+binomial <- rbinom(n_observations, n_observations, 0.85)
+uniform <- runif(n_observations, min = -20, max = 2)
+exponential <- rexp(n_observations)
+
+data <- data.frame(Normal = normal,
+                   Poisson = poisson,
+                   Binomial = binomial,
+                   Uniform = uniform,
+                   Exponential = exponential)
+print(head(data))
+```
+
+```{r}
+summary(data)
+```
+
+Now that we have created our dataset, let's visualize the distributions using historgrams followed by a scatter matrix.
+
+## Histograms
+
+```{r}
+# histograms
+par(mfrow = c(2, 3))
+hist(data$Normal)
+hist(data$Poisson)
+hist(data$Uniform)
+hist(data$Exponential)
+hist(data$Binomial)
+```
+
+## Scatter Matrix
+
+```{r}
+pairs(data)
+```
+
+We can see from above that there is no clear relationship between any two variables that is easily discernible. Let's use PCA to see how well this data can be projected onto two dimensions.
+
+## PCA
+
