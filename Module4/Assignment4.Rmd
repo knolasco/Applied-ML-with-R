@@ -54,3 +54,85 @@ We can see from above that there is no clear relationship between any two variab
 
 ## PCA
 
+Let's use PCA to reduce the dimensionality of this dataset. The goal is to reduce it to 2 dimensions, but we will use the cummulative variance to decide how many principal components will be enough.
+
+```{r}
+model.pca_not_scaled <- prcomp(data)
+model.pca_scaled <- prcomp(data, scale = TRUE)
+
+print("Results for PCA not scaling the data")
+print(summary(model.pca_not_scaled))
+
+print("Results for PCA scaled")
+print(summary(model.pca_scaled))
+```
+
+
+We can see that ~98% of the variance can be explained using the first three principal components for the PCA not scaled. Let's visualize the principal components.
+
+```{r, message = FALSE, results = 'hide'}
+library(devtools)
+library(ggbiplot)
+
+ggbiplot(model.pca_not_scaled)
+```
+It's a little difficult to see the components here, but we will take the first three as planned.
+
+```{r}
+data_tr <- model.pca_not_scaled$x[, c('PC1','PC2','PC3')]
+
+# print first 5 rows for PCA dataset and original dataset
+print(head(data_tr))
+print(head(data))
+
+```
+
+## DBSCAN
+
+Now that we have our transformed dataset we will use DBSCAN to classify the observations. Then we will plot it using the first 2 PCA's and see how the observations were grouped.
+
+```{r}
+library(fpc)
+set.seed(1995)
+db <- fpc::dbscan(data_tr, eps = 0.15, MinPts = 5)
+
+plot(db, data_tr, main = "DBSCAN", frame = FALSE)
+```
+
+Above we can see the results of DBSCAN. We can see that the algorithm did not find any groups that it can call clusters. We will iteratively change the size of epsilon for the algorithm and see the results.
+
+```{r}
+library(glue)
+set.seed(1995)
+par(mfrow = c(2, 3))
+for (eps_size in 1:6){
+  db <- fpc::dbscan(data_tr, eps = eps_size, MinPts = 5)
+
+  plot(db, data_tr, main = glue("DBSCAN using EPS = {eps_size}"), frame = FALSE)
+}
+```
+
+We can see that the algorithm was able to find clusters for epsilon >= 2. Let's keep epsilon = 3 and iterate through the MinPts parameter.
+
+```{r}
+set.seed(1995)
+par(mfrow = c(2, 3))
+for (n_points in 1:6){
+  db <- fpc::dbscan(data_tr, eps = 3, MinPts = n_points)
+
+  plot(db, data_tr, main = glue("DBSCAN using MinPts = {n_points}"), frame = FALSE)
+}
+```
+
+Let's choose MinPts = 3 and plot it in it's own.
+
+```{r}
+set.seed(1995)
+db <- fpc::dbscan(data_tr, eps = 3, MinPts = 3)
+
+plot(db, data_tr, main = "DBSCAN", frame = FALSE)
+```
+
+We can see that the alorithm was able to cluster this data into a few clusters. We can also see that the values that are far from the center were not clustered because they were not within epsilon of other points. 
+
+## 
