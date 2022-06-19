@@ -1,0 +1,126 @@
+---
+title: "Topic Modeling for Marvel Movie Comments"
+author: "Kevin Nolasco"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r, message = FALSE, results = 'hide'}
+library(textmineR)
+library(tidyverse)
+
+```
+
+# Data
+
+For this assignment I will be revisiting the dataset that I generated in the previous class for my final project; https://github.com/knolasco/Intro_to_NLP/tree/master/Marvel_Ratings .
+
+In this project, I used the YouTube API to compile a list of comments for Marvel movie trailers. The movie comments are saved as a .csv file and will be used to attempt topic modeling in this assignment.
+
+
+```{r}
+comments <- read.csv('data/movie_comments.csv')
+print(head(comments))
+print(summary(comments))
+```
+
+## Pre-Processing
+
+The current dataset has many comments that are probably not useful for us. For example, the very first row in the dataset contains time-stamps of the video, which isn't very good for determining what the comment is actually talking about. From my previous project, I decided to only keep comments that were between 20 and 220 characters. I will do the same here.
+
+```{r}
+comments$comment_length <- nchar(comments$comment_cleaned)
+# filter comments to be between 20 and 220 characters
+comments <- comments %>% filter(comment_length >= 20 & comment_length <= 220)
+head(comments$comment_cleaned)
+```
+
+The column we will use for LDA is the "comment_cleaned" column since the pre-processing was already completed in the previous project. This column contains the comments with the words lemmatized and removing the stopwords. Since the LDA model uses word-frequency, I don't want a topic to be created for the word "the" since it is the most used word in the dataset.
+
+# LDA
+
+I will be using this (https://towardsdatascience.com/beginners-guide-to-lda-topic-modelling-with-r-e57a5a8e7a25) page as a guide for completing this LDA. The first step is to create a docment-term matrix using the comments.
+
+```{r}
+# DTM
+dtm <- CreateDtm(comments$comment_cleaned, 
+                 doc_names = comments$MovieName,
+                 ngram_window = c(1,2))
+
+#explore the basic frequency
+tf <- TermDocFreq(dtm = dtm)
+original_tf <- tf %>% select(term, term_freq,doc_freq)
+rownames(original_tf) <- 1:nrow(original_tf)
+# Eliminate words appearing less than 2 times or in more than half of the
+# documents
+vocabulary <- tf$term[ tf$term_freq > 1 & tf$doc_freq < nrow(dtm) / 2 ]
+```
+
+Now that we have our Document-Term Matrix and the Term Document Frequency, let's train the LDA. We need to supply the number of topics. Since we are dealing with movie comments, I believe the number of topics should be at most 2. This is because comments that are made on videos typically want to address a single topic. We will set the number of topics to be 2 in case some comments expand on more than a single issue. We will also set alpha to be a low value (a document will contain few topics) and the beta value to also be low (a topic will contain a few of the words). We will then try a model where the beta value is higher.
+
+```{r}
+# with low beta
+k <- 2
+m <- FitLdaModel(dtm = dtm, k = k, iterations = 50, alpha = 0.01, beta = 0.01)
+m$k <- k
+
+# let's look at the top 20 terms
+m$top_terms <- GetTopTerms(phi = m$phi, M = 20)
+top20_wide <- as.data.frame(m$top_terms)
+print(top20_wide)
+```
+
+```{r}
+# with high beta
+k <- 2
+m <- FitLdaModel(dtm = dtm, k = k, iterations = 50, alpha = 0.01, beta = 0.8)
+m$k <- k
+
+# let's look at the top 20 terms
+m$top_terms <- GetTopTerms(phi = m$phi, M = 20)
+top20_wide <- as.data.frame(m$top_terms)
+print(top20_wide)
+```
+Looks like changing beta didn't do much. Let's try changing the alpha value to see how the results can change.
+
+```{r}
+# with high beta, and high alpha
+k <- 2
+m <- FitLdaModel(dtm = dtm, k = k, iterations = 50, alpha = 0.8, beta = 0.8)
+m$k <- k
+
+# let's look at the top 20 terms
+m$top_terms <- GetTopTerms(phi = m$phi, M = 20)
+top20_wide <- as.data.frame(m$top_terms)
+print(top20_wide)
+```
+
+Using a higher alpha value changes the output. We can start extracting some information from this: we see "spider love and spider_man good" which probably shows that lots of people are commenting on how they enjoy spiderman. Let's increase the number of topics that we are looking for to 3.
+
+```{r}
+# with high beta, and high alpha, and 3 topics
+k <- 3
+m <- FitLdaModel(dtm = dtm, k = k, iterations = 50, alpha = 0.9, beta = 0.9)
+m$k <- k
+
+# let's look at the top 20 terms
+m$top_terms <- GetTopTerms(phi = m$phi, M = 20)
+top20_wide <- as.data.frame(m$top_terms)
+print(top20_wide)
+```
+
+Finally, let's try a new model with a single topic per document. 
+
+```{r}
+# with high beta, and low alpha, and 1 topic
+k <- 1
+m <- FitLdaModel(dtm = dtm, k = k, iterations = 50, alpha = 0.01, beta = 0.9)
+m$k <- k
+
+# let's look at the top 20 terms
+m$top_terms <- GetTopTerms(phi = m$phi, M = 20)
+top20_wide <- as.data.frame(m$top_terms)
+print(top20_wide)
+```
+
+I think that this method (using a single topic, low alpha, and high beta) works best for this dataset. Using this method, we can see clearly what topic the comments in the dataset are addressing.
