@@ -124,3 +124,7 @@ print(top20_wide)
 ```
 
 I think that this method (using a single topic, low alpha, and high beta) works best for this dataset. Using this method, we can see clearly what topic the comments in the dataset are addressing.
+
+# Conclusion
+
+We were able to extract topics for the dataset provided. Since this dataset contains comments on marvel movie trailers, we can see that using 1 topic per comment works best to extract the different topics that are stored within the comments.
